@@ -2,121 +2,208 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 
 -- Variables
-local Prediction = 0.127047434437305158
-local CurrentTarget = nil
+local Prediction = 0.13
+local AutoFire = false
 local Locking = false
-local AutoUnlock = false
+local CurrentTarget = nil
+local HitboxPartName = "Head" -- Default hitbox
+local Accuracy = 100 -- % chance to hit
+local Smoothness = 0.25 -- 0-1 (0 = instant, 1 = slowest)
+local AutoUnlock = true
 local ESPEnabled = false
-local FOVEnabled = true
-local HitEffectEnabled = true
+local TeamCheck = true
+local ChamsEnabled = false
+local SpeedBoostEnabled = false
+local SpeedValue = 30 -- default speed boost
+local JumpAssistEnabled = false
+local NoRecoilEnabled = false
+local NoSpreadEnabled = false
+local SafeModeEnabled = false
 
--- ScreenGui
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
-ScreenGui.Name = "ZylxLockGUI"
+-- GUI Creation
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ZylxEliteGUI"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game.CoreGui
 
--- Main Frame
-local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 280, 0, 360)
-MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+-- Main draggable frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 320, 0, 400)
+MainFrame.Position = UDim2.new(0.05, 0, 0.1, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
 
 -- Title
-local Title = Instance.new("TextLabel", MainFrame)
-Title.Size = UDim2.new(1, 0, 0, 30)
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
-Title.Text = "Zylx Lock GUI"
+Title.Text = "Zylx Elite"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 22
+Title.TextSize = 28
+Title.Parent = MainFrame
 
--- Tabs container
-local TabsFrame = Instance.new("Frame", MainFrame)
-TabsFrame.Size = UDim2.new(1, 0, 0, 30)
-TabsFrame.Position = UDim2.new(0, 0, 0, 30)
+-- Tabs buttons container
+local TabsFrame = Instance.new("Frame")
+TabsFrame.Size = UDim2.new(1, 0, 0, 40)
+TabsFrame.Position = UDim2.new(0, 0, 0, 40)
 TabsFrame.BackgroundTransparency = 1
+TabsFrame.Parent = MainFrame
 
--- Content frame (below tabs)
-local ContentFrame = Instance.new("Frame", MainFrame)
-ContentFrame.Size = UDim2.new(1, -10, 1, -70)
-ContentFrame.Position = UDim2.new(0, 5, 0, 65)
-ContentFrame.BackgroundTransparency = 1
-
--- Tab buttons
-local tabs = {"Main", "Combat", "Visuals"}
+local tabs = {"Main", "Combat", "Visuals", "Movement", "Settings"}
 local tabButtons = {}
-local contentPages = {}
+local contentFrames = {}
 
 for i, tabName in ipairs(tabs) do
-local btn = Instance.new("TextButton", TabsFrame)
-btn.Size = UDim2.new(0, 90, 1, 0)
-btn.Position = UDim2.new(0, (i-1)*90, 0, 0)
-btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-btn.TextColor3 = Color3.new(1,1,1)
-btn.Font = Enum.Font.Gotham
-btn.TextSize = 16
-btn.Text = tabName
-btn.AutoButtonColor = false
-btn.Name = tabName .. "Tab"
-tabButtons[tabName] = btn
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1/#tabs, -4, 1, 0)
+    btn.Position = UDim2.new((i-1)/#tabs, 2, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 18
+    btn.Text = tabName
+    btn.AutoButtonColor = true
+    btn.Parent = TabsFrame
+    tabButtons[tabName] = btn
 
-local page = Instance.new("Frame", ContentFrame)  
-page.Size = UDim2.new(1, 0, 1, 0)  
-page.Visible = false  
-contentPages[tabName] = page
-
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -10, 1, -50)
+    frame.Position = UDim2.new(0, 5, 0, 50)
+    frame.BackgroundTransparency = 1
+    frame.Visible = false
+    frame.Parent = MainFrame
+    contentFrames[tabName] = frame
 end
-contentPages["Main"].Visible = true
-tabButtons["Main"].BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 
--- Function to switch tabs
+-- Show Main tab by default
+contentFrames["Main"].Visible = true
+tabButtons["Main"].BackgroundColor3 = Color3.fromRGB(70, 70, 100)
+
+-- Tab switch function
 local function switchTab(name)
-for tn, btn in pairs(tabButtons) do
-btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-contentPages[tn].Visible = false
-end
-tabButtons[name].BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-contentPages[name].Visible = true
-end
-for tn, btn in pairs(tabButtons) do
-btn.MouseButton1Click:Connect(function()
-switchTab(tn)
-end)
+    for tn, btn in pairs(tabButtons) do
+        btn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+        contentFrames[tn].Visible = false
+    end
+    tabButtons[name].BackgroundColor3 = Color3.fromRGB(70, 70, 100)
+    contentFrames[name].Visible = true
 end
 
--- ======= Main Tab =======
--- Lock Button
-local LockButton = Instance.new("TextButton", contentPages["Main"])
-LockButton.Size = UDim2.new(0, 120, 0, 40)
+for tn, btn in pairs(tabButtons) do
+    btn.MouseButton1Click:Connect(function()
+        switchTab(tn)
+    end)
+end
+
+-- Toggle GUI button (small button on screen)
+local toggleGuiBtn = Instance.new("TextButton")
+toggleGuiBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleGuiBtn.Position = UDim2.new(0, 10, 0.8, 0)
+toggleGuiBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 100)
+toggleGuiBtn.TextColor3 = Color3.new(1,1,1)
+toggleGuiBtn.Font = Enum.Font.GothamBold
+toggleGuiBtn.TextSize = 28
+toggleGuiBtn.Text = "Z"
+toggleGuiBtn.AutoButtonColor = true
+toggleGuiBtn.Parent = ScreenGui
+local guiVisible = true
+toggleGuiBtn.MouseButton1Click:Connect(function()
+    guiVisible = not guiVisible
+    MainFrame.Visible = guiVisible
+end)
+
+-- Utility function: Create labeled toggle button
+local function createToggleButton(parent, posY, text)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, 35)
+    btn.Position = UDim2.new(0, 10, 0, posY)
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,60)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 16
+    btn.Text = text
+    btn.AutoButtonColor = true
+    btn.Parent = parent
+    return btn
+end
+
+-- Utility function: Create labeled slider (with label updating)
+local function createSlider(parent, posY, labelText, minVal, maxVal, defaultVal, callback)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -20, 0, 20)
+    label.Position = UDim2.new(0, 10, 0, posY)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 14
+    label.Text = labelText .. ": " .. tostring(defaultVal)
+    label.Parent = parent
+
+    local slider = Instance.new("TextButton")
+    slider.Size = UDim2.new(1, -20, 0, 20)
+    slider.Position = UDim2.new(0, 10, 0, posY + 22)
+    slider.BackgroundColor3 = Color3.fromRGB(40,40,60)
+    slider.Text = ""
+    slider.AutoButtonColor = false
+    slider.Parent = parent
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((defaultVal - minVal) / (maxVal - minVal), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    fill.Parent = slider
+
+    local dragging = false
+    slider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+    slider.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    slider.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local relativeX = math.clamp((input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X, 0, 1)
+            fill.Size = UDim2.new(relativeX, 0, 1, 0)
+            local val = math.floor(minVal + relativeX * (maxVal - minVal) * 1000) / 1000
+            label.Text = labelText .. ": " .. tostring(val)
+            callback(val)
+        end
+    end)
+    return label, slider
+end
+
+-- ===== Main Tab Content =====
+local mainTab = contentFrames["Main"]
+
+-- Lock Button (movable)
+local LockButton = Instance.new("TextButton")
+LockButton.Size = UDim2.new(0, 130, 0, 45)
 LockButton.Position = UDim2.new(0, 10, 0, 10)
-LockButton.Text = "🔒 LOCK"
-LockButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+LockButton.BackgroundColor3 = Color3.fromRGB(50,50,80)
 LockButton.TextColor3 = Color3.new(1,1,1)
 LockButton.Font = Enum.Font.GothamBold
-LockButton.TextSize = 18
+LockButton.TextSize = 20
+LockButton.Text = "🔒 LOCK"
 LockButton.AutoButtonColor = true
 LockButton.Active = true
 LockButton.Draggable = true
+LockButton.Parent = mainTab
 
 -- Lock Tool toggle
-local LockToolToggle = Instance.new("TextButton", contentPages["Main"])
-LockToolToggle.Size = UDim2.new(0, 120, 0, 40)
-LockToolToggle.Position = UDim2.new(0, 150, 0, 10)
-LockToolToggle.Text = "Lock Tool OFF"
-LockToolToggle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-LockToolToggle.TextColor3 = Color3.new(1,1,1)
-LockToolToggle.Font = Enum.Font.GothamBold
-LockToolToggle.TextSize = 18
-LockToolToggle.AutoButtonColor = true
-
+local LockToolToggle = createToggleButton(mainTab, 65, "Lock Tool: OFF")
 local Tool = Instance.new("Tool")
 Tool.RequiresHandle = false
 Tool.Name = "Lock Tool"
@@ -124,197 +211,163 @@ Tool.Enabled = false
 Tool.Parent = LocalPlayer.Backpack
 
 LockToolToggle.MouseButton1Click:Connect(function()
-if Tool.Enabled then
-Tool.Enabled = false
-LockToolToggle.Text = "Lock Tool OFF"
-LockButton.Visible = true
-else
-Tool.Enabled = true
-LockToolToggle.Text = "Lock Tool ON"
-LockButton.Visible = false
-Locking = false
-CurrentTarget = nil
-LockButton.Text = "🔒 LOCK"
-end
+    if Tool.Enabled then
+        Tool.Enabled = false
+        LockToolToggle.Text = "Lock Tool: OFF"
+        LockButton.Visible = true
+        Locking = false
+        CurrentTarget = nil
+        LockButton.Text = "🔒 LOCK"
+    else
+        Tool.Enabled = true
+        LockToolToggle.Text = "Lock Tool: ON"
+        LockButton.Visible = false
+        Locking = false
+        CurrentTarget = nil
+        LockButton.Text = "🔒 LOCK"
+    end
 end)
 
--- Logic for Tool Activation
 Tool.Activated:Connect(function()
-local target = Mouse.Target and Players:GetPlayerFromCharacter(Mouse.Target.Parent)
-if target and target ~= LocalPlayer then
-CurrentTarget = target
-Locking = true
-LockButton.Text = "🔓 UNLOCK"
-end
+    local target = Mouse.Target and Players:GetPlayerFromCharacter(Mouse.Target.Parent)
+    if target and target ~= LocalPlayer then
+        CurrentTarget = target
+        Locking = true
+        LockButton.Text = "🔓 UNLOCK"
+    end
 end)
 
 LockButton.MouseButton1Click:Connect(function()
-if Locking then
-Locking = false
-CurrentTarget = nil
-LockButton.Text = "🔒 LOCK"
-return
-end
-
-local closest, shortest = nil, math.huge  
-for _, player in ipairs(Players:GetPlayers()) do  
-    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then  
-        local head = player.Character:FindFirstChild("Head")  
-        if head then  
-            local screenPos, onScreen = Camera:WorldToScreenPoint(head.Position)  
-            if onScreen then  
-                local dist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude  
-                if dist < shortest then  
-                    closest = player  
-                    shortest = dist  
-                end  
-            end  
-        end  
-    end  
-end  
-
-if closest then  
-    CurrentTarget = closest  
-    Locking = true  
-    LockButton.Text = "🔓 UNLOCK"  
-end
-
+    if Locking then
+        Locking = false
+        CurrentTarget = nil
+        LockButton.Text = "🔒 LOCK"
+        return
+    end
+    -- Lock nearest target in FOV circle
+    local closest, shortestDist = nil, math.huge
+    local FOVRadius = 150 -- same as visual FOV circle radius
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local part = player.Character:FindFirstChild(HitboxPartName)
+            if part then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(part.Position)
+                if onScreen then
+                    local distToMouse = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if distToMouse < shortestDist and distToMouse <= FOVRadius then
+                        if TeamCheck and player.Team == LocalPlayer.Team then
+                            -- Skip teammates
+                        else
+                            closest = player
+                            shortestDist = distToMouse
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if closest then
+        CurrentTarget = closest
+        Locking = true
+        LockButton.Text = "🔓 UNLOCK"
+    end
 end)
 
--- ======= Combat Tab =======
-local CombatFrame = contentPages["Combat"]
-
--- Prediction slider label
-local PredictionLabel = Instance.new("TextLabel", CombatFrame)
-PredictionLabel.Position = UDim2.new(0, 10, 0, 10)
-PredictionLabel.Size = UDim2.new(1, -20, 0, 25)
-PredictionLabel.Text = "Prediction: " .. string.format("%.3f", Prediction)
-PredictionLabel.TextColor3 = Color3.new(1,1,1)
-PredictionLabel.BackgroundTransparency = 1
-PredictionLabel.Font = Enum.Font.Gotham
-PredictionLabel.TextSize = 18
+-- ===== Combat Tab Content =====
+local combatTab = contentFrames["Combat"]
 
 -- Prediction slider
-local PredictionSlider = Instance.new("TextButton", CombatFrame)
-PredictionSlider.Position = UDim2.new(0, 10, 0, 45)
-PredictionSlider.Size = UDim2.new(1, -20, 0, 20)
-PredictionSlider.BackgroundColor3 = Color3.fromRGB(40,40,40)
-PredictionSlider.Text = ""
-PredictionSlider.AutoButtonColor = false
+local function onPredictionChange(val)
+    Prediction = val
+end
+local predLabel, predSlider = createSlider(combatTab, 10, "Prediction", 0, 0.2, Prediction, onPredictionChange)
 
-local sliderFill = Instance.new("Frame", PredictionSlider)
-sliderFill.Size = UDim2.new((Prediction / 0.2), 0, 1, 0)
-sliderFill.BackgroundColor3 = Color3.fromRGB(255,0,0)
+-- Accuracy slider
+local function onAccuracyChange(val)
+    Accuracy = val * 100
+end
+local accLabel, accSlider = createSlider(combatTab, 60, "Accuracy", 0, 100, Accuracy/100, onAccuracyChange)
 
--- Drag logic
-local dragging = false
-PredictionSlider.InputBegan:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-dragging = true
+-- Smoothness slider
+local SmoothnessVal = 0.25
+local function onSmoothnessChange(val)
+    SmoothnessVal = val
 end
-end)
-PredictionSlider.InputEnded:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-dragging = false
-end
-end)
-PredictionSlider.InputChanged:Connect(function(input)
-if dragging and input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
-local pos = math.clamp((input.Position.X - PredictionSlider.AbsolutePosition.X) / PredictionSlider.AbsoluteSize.X, 0, 1)
-Prediction = pos * 0.2
-sliderFill.Size = UDim2.new(pos, 0, 1, 0)
-PredictionLabel.Text = "Prediction: " .. string.format("%.3f", Prediction)
-end
+local smoothLabel, smoothSlider = createSlider(combatTab, 110, "Smoothness", 0, 1, SmoothnessVal, onSmoothnessChange)
+
+-- Auto Fire toggle
+local AutoFireToggle = createToggleButton(combatTab, 160, "Auto Fire: OFF")
+AutoFireToggle.MouseButton1Click:Connect(function()
+    AutoFire = not AutoFire
+    AutoFireToggle.Text = AutoFire and "Auto Fire: ON" or "Auto Fire: OFF"
 end)
 
 -- Auto Unlock toggle
-local AutoUnlockToggle = Instance.new("TextButton", CombatFrame)
-AutoUnlockToggle.Position = UDim2.new(0, 10, 0, 80)
-AutoUnlockToggle.Size = UDim2.new(1, -20, 0, 40)
-AutoUnlockToggle.Text = "Auto Unlock: OFF"
-AutoUnlockToggle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-AutoUnlockToggle.TextColor3 = Color3.new(1,1,1)
-AutoUnlockToggle.Font = Enum.Font.GothamBold
-AutoUnlockToggle.TextSize = 18
-AutoUnlockToggle.AutoButtonColor = true
-
+local AutoUnlockToggle = createToggleButton(combatTab, 210, "Auto Unlock: ON")
+AutoUnlock = true
 AutoUnlockToggle.MouseButton1Click:Connect(function()
-AutoUnlock = not AutoUnlock
-if AutoUnlock then
-AutoUnlockToggle.Text = "Auto Unlock: ON"
-else
-AutoUnlockToggle.Text = "Auto Unlock: OFF"
-end
+    AutoUnlock = not AutoUnlock
+    AutoUnlockToggle.Text = AutoUnlock and "Auto Unlock: ON" or "Auto Unlock: OFF"
 end)
 
--- Accuracy slider
-local Accuracy = 100
-local AccuracyLabel = Instance.new("TextLabel", CombatFrame)
-AccuracyLabel.Position = UDim2.new(0, 10, 0, 130)
-AccuracyLabel.Size = UDim2.new(1, -20, 0, 25)
-AccuracyLabel.Text = "Accuracy: " .. tostring(Accuracy) .. "%"
-AccuracyLabel.TextColor3 = Color3.new(1,1,1)
-AccuracyLabel.BackgroundTransparency = 1
-AccuracyLabel.Font = Enum.Font.Gotham
-AccuracyLabel.TextSize = 18
+-- Hitbox selector dropdown
+local hitboxes = {"Head", "UpperTorso", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LowerTorso"}
+local selectedHitboxIndex = 1
+local HitboxLabel = Instance.new("TextLabel")
+HitboxLabel.Size = UDim2.new(1, -20, 0, 25)
+HitboxLabel.Position = UDim2.new(0, 10, 0, 270)
+HitboxLabel.Text = "Hitbox: " .. hitboxes[selectedHitboxIndex]
+HitboxLabel.TextColor3 = Color3.new(1,1,1)
+HitboxLabel.BackgroundTransparency = 1
+HitboxLabel.Font = Enum.Font.Gotham
+HitboxLabel.TextSize = 18
+HitboxLabel.Parent = combatTab
 
-local AccuracySlider = Instance.new("TextButton", CombatFrame)
-AccuracySlider.Position = UDim2.new(0, 10, 0, 160)
-AccuracySlider.Size = UDim2.new(1, -20, 0, 20)
-AccuracySlider.BackgroundColor3 = Color3.fromRGB(40,40,40)
-AccuracySlider.Text = ""
-AccuracySlider.AutoButtonColor = false
+local HitboxBtn = Instance.new("TextButton")
+HitboxBtn.Size = UDim2.new(1, -20, 0, 35)
+HitboxBtn.Position = UDim2.new(0, 10, 0, 300)
+HitboxBtn.Text = "Change Hitbox"
+HitboxBtn.Font = Enum.Font.GothamBold
+HitboxBtn.TextSize = 16
+HitboxBtn.BackgroundColor3 = Color3.fromRGB(40,40,60)
+HitboxBtn.TextColor3 = Color3.new(1,1,1)
+HitboxBtn.Parent = combatTab
+HitboxBtn.AutoButtonColor = true
 
-local accuracyFill = Instance.new("Frame", AccuracySlider)
-accuracyFill.Size = UDim2.new(Accuracy/100, 0, 1, 0)
-accuracyFill.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-
-local draggingAcc = false
-AccuracySlider.InputBegan:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-draggingAcc = true
-end
-end)
-AccuracySlider.InputEnded:Connect(function(input)
-if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-draggingAcc = false
-end
-end)
-AccuracySlider.InputChanged:Connect(function(input)
-if draggingAcc and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-local pos = math.clamp((input.Position.X - AccuracySlider.AbsolutePosition.X) / AccuracySlider.AbsoluteSize.X, 0, 1)
-Accuracy = math.floor(pos * 100)
-accuracyFill.Size = UDim2.new(pos, 0, 1, 0)
-AccuracyLabel.Text = "Accuracy: " .. tostring(Accuracy) .. "%"
-end
+HitboxBtn.MouseButton1Click:Connect(function()
+    selectedHitboxIndex = selectedHitboxIndex + 1
+    if selectedHitboxIndex > #hitboxes then selectedHitboxIndex = 1 end
+    HitboxLabel.Text = "Hitbox: " .. hitboxes[selectedHitboxIndex]
+    HitboxPartName = hitboxes[selectedHitboxIndex]
 end)
 
--- ======= Visuals Tab =======
-local VisualsFrame = contentPages["Visuals"]
+-- ===== Visuals Tab Content =====
+local visualsTab = contentFrames["Visuals"]
 
-local ESPToggle = Instance.new("TextButton", VisualsFrame)
-ESPToggle.Size = UDim2.new(1, -20, 0, 40)
-ESPToggle.Position = UDim2.new(0, 10, 0, 10)
-ESPToggle.Text = "ESP: OFF"
-ESPToggle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-ESPToggle.TextColor3 = Color3.new(1,1,1)
-ESPToggle.Font = Enum.Font.GothamBold
-ESPToggle.TextSize = 18
-ESPToggle.AutoButtonColor = true
+-- ESP Toggle
+local ESPToggle = createToggleButton(visualsTab, 10, "ESP: OFF")
+ESPToggle.MouseButton1Click:Connect(function()
+    ESPEnabled = not ESPEnabled
+    ESPToggle.Text = ESPEnabled and "ESP: ON" or "ESP: OFF"
+end)
 
--- Visuals Tab FOV Toggle
+-- Team Check Toggle
+local TeamCheckToggle = createToggleButton(visualsTab, 60, "Team Check: ON")
+TeamCheckToggle.MouseButton1Click:Connect(function()
+    TeamCheck = not TeamCheck
+    TeamCheckToggle.Text = TeamCheck and "Team Check: ON" or "Team Check: OFF"
+end)
+
+-- Chams Toggle
+local ChamsToggle = createToggleButton(visualsTab, 110, "Chams: OFF")
+ChamsToggle.MouseButton1Click:Connect(function()
+    ChamsEnabled = not ChamsEnabled
+    ChamsToggle.Text = ChamsEnabled and "Chams: ON" or "Chams: OFF"
+end)
+
+-- FOV Circle Toggle
 local FOVEnabled = true
-
-local FOVToggle = Instance.new("TextButton", VisualsFrame)
-FOVToggle.Size = UDim2.new(1, -20, 0, 40)
-FOVToggle.Position = UDim2.new(0, 10, 0, 60)
-FOVToggle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-FOVToggle.TextColor3 = Color3.new(1, 1, 1)
-FOVToggle.Font = Enum.Font.GothamBold
-FOVToggle.TextSize = 18
-FOVToggle.AutoButtonColor = true
-FOVToggle.Text = "Disable FOV Circle"  -- starts enabled
-
+local FOVToggle = createToggleButton(visualsTab, 160, "Disable FOV Circle")
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Radius = 150
 FOVCircle.Color = Color3.new(1, 0, 0)
@@ -324,21 +377,50 @@ FOVCircle.Filled = false
 FOVCircle.Visible = true
 
 RunService.RenderStepped:Connect(function()
-if FOVEnabled then
-local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-FOVCircle.Position = mousePos
-FOVCircle.Visible = true
-else
-FOVCircle.Visible = false
-end
+    if FOVEnabled then
+        local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+        FOVCircle.Position = mousePos
+        FOVCircle.Visible = true
+    else
+        FOVCircle.Visible = false
+    end
 end)
 
 FOVToggle.MouseButton1Click:Connect(function()
-FOVEnabled = not FOVEnabled
-if FOVEnabled then
-FOVToggle.Text = "Disable FOV Circle"
-else
-FOVToggle.Text = "Enable FOV Circle"
-end
+    FOVEnabled = not FOVEnabled
+    if FOVEnabled then
+        FOVToggle.Text = "Disable FOV Circle"
+    else
+        FOVToggle.Text = "Enable FOV Circle"
+    end
 end)
 
+-- ESP Drawing containers
+local ESPBoxes = {}
+local ESPNames = {}
+local ESPHealthBars = {}
+local ESPDistanceLabels = {}
+
+-- Function to create ESP elements for a player
+local function createESPForPlayer(player)
+    if ESPBoxes[player] then return end
+    local box = Drawing.new("Square")
+    box.Color = Color3.fromRGB(255, 0, 0)
+    box.Thickness = 2
+    box.Filled = false
+
+    local nameTag = Drawing.new("Text")
+    nameTag.Text = player.Name
+    nameTag.Color = Color3.fromRGB(255, 255, 255)
+    nameTag.Size = 16
+    nameTag.Center = true
+
+    local healthBar = Drawing.new("Square")
+    healthBar.Color = Color3.fromRGB(0, 255, 0)
+    healthBar.Thickness = 3
+    healthBar.Filled = true
+
+    local distLabel = Drawing.new("Text")
+    distLabel.Text = ""
+    distLabel.Color = Color3.fromRGB(255, 255, 255)
+    distLabel.Size = 14
